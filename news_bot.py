@@ -18,6 +18,8 @@ Environment variables (see .env.example / README.md):
     NEWSDATA_API_KEY      - optional, adds NewsData.io as an extra source
     TOP_N                 - optional, default 20
     GROQ_MODEL            - optional, default "openai/gpt-oss-120b"
+    ENABLE_AUDIO          - optional, "true"/"false", default "true"
+    TTS_VOICE             - optional, default "en-IN-NeerjaNeural"
 """
 
 import os
@@ -25,12 +27,14 @@ import re
 import json
 import time
 import html
+import asyncio
 import difflib
 import logging
 from datetime import datetime, timezone
 
 import requests
 import feedparser
+import edge_tts
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("news_bot")
@@ -48,6 +52,12 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "")
 NEWSDATA_API_KEY = os.environ.get("NEWSDATA_API_KEY", "")
+
+ENABLE_AUDIO = os.environ.get("ENABLE_AUDIO", "true").strip().lower() != "false"
+# Natural-sounding Indian English neural voice (free, via edge-tts).
+# Other good options: "en-IN-PrabhatNeural" (male, Indian English),
+# "en-US-AriaNeural" (US female), "en-GB-RyanNeural" (UK male).
+TTS_VOICE = os.environ.get("TTS_VOICE", "en-IN-NeerjaNeural")
 
 TOP_N = int(os.environ.get("TOP_N", "20"))
 
@@ -355,6 +365,57 @@ def send_telegram(text):
 
 
 # ---------------------------------------------------------------------------
+# 5b. Text-to-speech audio briefing
+# ---------------------------------------------------------------------------
+
+def build_audio_script(ranked):
+    """Turn the ranked stories into natural spoken-word text for TTS."""
+    today = datetime.now(timezone.utc).astimezone().strftime("%A, %B %d")
+    parts = [f"Good morning. Here is your top {len(ranked)} world news briefing for {today}."]
+    for item in ranked:
+        rank = item.get("rank", "")
+        title = (item.get("title") or "").strip()
+        summary = (item.get("summary") or "").strip()
+        parts.append(f"Story {rank}. {title}. {summary}")
+    parts.append("That's your briefing for today. Have a great day ahead.")
+    # edge-tts handles long text fine, but keep punctuation clean for natural pacing.
+    return " ".join(parts)
+
+
+async def _synthesize(text, voice, output_path):
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save(output_path)
+
+
+def text_to_speech(text, output_path, voice=TTS_VOICE):
+    log.info(f"Synthesizing audio with voice '{voice}'...")
+    asyncio.run(_synthesize(text, voice, output_path))
+    size_kb = os.path.getsize(output_path) / 1024
+    log.info(f"Audio file written: {output_path} ({size_kb:.0f} KB)")
+
+
+def send_telegram_audio(file_path, title):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set")
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendAudio"
+    with open(file_path, "rb") as f:
+        resp = requests.post(
+            url,
+            data={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "title": title,
+                "performer": "AI News Bot",
+            },
+            files={"audio": (os.path.basename(file_path), f, "audio/mpeg")},
+            timeout=120,
+        )
+    if not resp.ok:
+        log.error(f"Telegram audio send failed: {resp.status_code} {resp.text}")
+        resp.raise_for_status()
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -375,8 +436,21 @@ def main():
     ranked = rank_with_llm(unique_articles, top_n=TOP_N)
 
     message = format_message(ranked)
-    log.info("Sending to Telegram...")
+    log.info("Sending text digest to Telegram...")
     send_telegram(message)
+
+    if ENABLE_AUDIO:
+        try:
+            script = build_audio_script(ranked)
+            audio_path = "/tmp/daily_briefing.mp3"
+            text_to_speech(script, audio_path, voice=TTS_VOICE)
+            today_label = datetime.now(timezone.utc).astimezone().strftime("%d %b %Y")
+            log.info("Sending audio briefing to Telegram...")
+            send_telegram_audio(audio_path, title=f"Daily News Briefing - {today_label}")
+        except Exception as e:
+            # Don't fail the whole run just because audio failed - the text
+            # digest already went out successfully above.
+            log.error(f"Audio briefing failed (text digest was still sent): {e}")
 
     log.info("Done. ✅")
 

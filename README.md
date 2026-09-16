@@ -13,7 +13,9 @@ Runs automatically and for free via GitHub Actions — no server required.
 3. **Rank & summarize** — sends the combined headline list to Groq's free
    `openai/gpt-oss-120b` model, which picks the 20 most globally
    significant, diverse stories and writes a short summary for each.
-4. **Deliver** — posts a formatted digest to your Telegram chat.
+4. **Deliver** — posts a formatted digest to your Telegram chat, plus a
+   spoken-word audio briefing (MP3, generated with a free neural
+   text-to-speech voice — no API key needed).
 5. **Schedule** — a GitHub Actions workflow runs the script every morning
    automatically, for free, forever (within GitHub's generous free tier).
 
@@ -78,6 +80,13 @@ python news_bot.py
 - **LLM model**: set env var `GROQ_MODEL` (default `openai/gpt-oss-120b`);
   swap in another Groq model, or point `GROQ_URL`/logic at Gemini later
 - **Message style**: edit `format_message()` for a different layout
+- **Audio briefing**: set `ENABLE_AUDIO=false` to turn it off entirely, or
+  change the voice with `TTS_VOICE` (default `en-IN-NeerjaNeural`). Other
+  good free options: `en-IN-PrabhatNeural` (Indian English, male),
+  `en-US-AriaNeural` (US English, female), `en-GB-RyanNeural` (UK, male).
+  Full voice list: run `edge-tts --list-voices` after installing, or see
+  the `edge-tts` PyPI page. Uses Microsoft's free neural TTS via the
+  `edge-tts` library — no API key, no cost.
 
 ## Ideas for later enhancements
 

@@ -231,7 +231,9 @@ def rank_with_llm(articles, top_n=TOP_N):
                     {"role": "user", "content": user_prompt},
                 ],
                 "temperature": 0.3,
-                "max_tokens": 3000,
+                "max_tokens": 8000,
+                "reasoning_effort": "low",  # gpt-oss models spend tokens "thinking";
+                                            # keep that light so content isn't starved
             },
             timeout=(10, 45),  # (connect timeout, read timeout) - fail fast instead of hanging
         )
@@ -241,7 +243,20 @@ def rank_with_llm(articles, top_n=TOP_N):
         raise RuntimeError("Groq API accepted the connection but didn't respond in time (45s)")
     log.info(f"Groq responded with status {resp.status_code}")
     resp.raise_for_status()
-    content = resp.json()["choices"][0]["message"]["content"].strip()
+    data = resp.json()
+    message = data["choices"][0]["message"]
+    content = (message.get("content") or "").strip()
+    finish_reason = data["choices"][0].get("finish_reason", "unknown")
+
+    if not content:
+        # gpt-oss models sometimes put everything in a separate reasoning
+        # field if content is empty (e.g. it ran out of tokens mid-thought)
+        reasoning = message.get("reasoning", "")
+        raise RuntimeError(
+            f"Groq returned an empty content field (finish_reason={finish_reason}). "
+            f"Reasoning field had {len(reasoning)} chars. Try raising max_tokens further "
+            f"or check if the model name/params changed."
+        )
 
     # Strip accidental markdown code fences
     content = re.sub(r"^```json\s*|^```\s*|```$", "", content, flags=re.MULTILINE).strip()

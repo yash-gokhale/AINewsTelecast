@@ -68,11 +68,30 @@ GOOGLE_NEWS_FEEDS = {
 # 1. Fetch
 # ---------------------------------------------------------------------------
 
+REQUEST_HEADERS = {
+    # Google News RSS silently returns empty results (no error) to requests
+    # that look like a bot / lack a browser-like User-Agent, especially from
+    # datacenter IPs like GitHub Actions runners. This header fixes that.
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    )
+}
+
+
 def fetch_google_news():
     articles = []
     for category, url in GOOGLE_NEWS_FEEDS.items():
         try:
-            feed = feedparser.parse(url)
+            resp = requests.get(url, headers=REQUEST_HEADERS, timeout=15)
+            if resp.status_code != 200:
+                log.warning(f"Feed '{category}' returned HTTP {resp.status_code}")
+                continue
+            feed = feedparser.parse(resp.content)
+            if getattr(feed, "bozo", 0) and not feed.entries:
+                log.warning(f"Feed '{category}' failed to parse: {feed.get('bozo_exception')}")
+                continue
+            log.info(f"  '{category}': {len(feed.entries)} entries")
             for entry in feed.entries[:25]:
                 title = html.unescape(re.sub(r"\s+-\s+[^-]+$", "", entry.title))  # strip " - Source" suffix
                 source = ""

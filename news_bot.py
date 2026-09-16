@@ -17,7 +17,7 @@ Environment variables (see .env.example / README.md):
     GNEWS_API_KEY         - optional, adds GNews.io as an extra source
     NEWSDATA_API_KEY      - optional, adds NewsData.io as an extra source
     TOP_N                 - optional, default 20
-    GROQ_MODEL            - optional, default "llama-3.3-70b-versatile"
+    GROQ_MODEL            - optional, default "openai/gpt-oss-120b"
 """
 
 import os
@@ -40,7 +40,7 @@ log = logging.getLogger("news_bot")
 # ---------------------------------------------------------------------------
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")

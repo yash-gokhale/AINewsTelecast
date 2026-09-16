@@ -10,6 +10,7 @@ on:
 jobs:
   send-news:
     runs-on: ubuntu-latest
+    timeout-minutes: 5   # hard cap - kills the job instead of hanging forever
     steps:
       - name: Check out repo
         uses: actions/checkout@v4

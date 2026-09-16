@@ -216,23 +216,30 @@ def rank_with_llm(articles, top_n=TOP_N):
         f"Order the array by rank, most important first. Respond with ONLY the JSON array."
     )
 
-    resp = requests.post(
-        GROQ_URL,
-        headers={
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": GROQ_MODEL,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": 0.3,
-            "max_tokens": 3000,
-        },
-        timeout=60,
-    )
+    log.info(f"Sending {len(candidates)} candidate headlines to Groq...")
+    try:
+        resp = requests.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": GROQ_MODEL,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.3,
+                "max_tokens": 3000,
+            },
+            timeout=(10, 45),  # (connect timeout, read timeout) - fail fast instead of hanging
+        )
+    except requests.exceptions.ConnectTimeout:
+        raise RuntimeError("Timed out connecting to Groq API (network issue reaching api.groq.com)")
+    except requests.exceptions.ReadTimeout:
+        raise RuntimeError("Groq API accepted the connection but didn't respond in time (45s)")
+    log.info(f"Groq responded with status {resp.status_code}")
     resp.raise_for_status()
     content = resp.json()["choices"][0]["message"]["content"].strip()
 

@@ -11,7 +11,7 @@ Runs automatically and for free via GitHub Actions — no server required.
    plus GNews.io / NewsData.io if you add their free keys later.
 2. **Dedupe** — collapses near-identical stories reported by multiple outlets.
 3. **Rank & summarize** — sends the combined headline list to Groq's free
-   `llama-3.3-70b-versatile` model, which picks the 20 most globally
+   `openai/gpt-oss-120b` model, which picks the 20 most globally
    significant, diverse stories and writes a short summary for each.
 4. **Deliver** — posts a formatted digest to your Telegram chat.
 5. **Schedule** — a GitHub Actions workflow runs the script every morning
@@ -75,7 +75,7 @@ python news_bot.py
 - **News topics/regions**: edit `GOOGLE_NEWS_FEEDS` in `news_bot.py`
   (add feeds for any country: change `gl=US&ceid=US:en` to e.g.
   `gl=IN&ceid=IN:en` for India, `gl=GB&ceid=GB:en` for UK, etc.)
-- **LLM model**: set env var `GROQ_MODEL` (default `llama-3.3-70b-versatile`);
+- **LLM model**: set env var `GROQ_MODEL` (default `openai/gpt-oss-120b`);
   swap in another Groq model, or point `GROQ_URL`/logic at Gemini later
 - **Message style**: edit `format_message()` for a different layout
 

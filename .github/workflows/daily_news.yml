@@ -2,15 +2,19 @@ name: Daily News Bot
 
 on:
   schedule:
-    # Runs at 02:00 UTC = 07:30 AM IST every day.
-    # Adjust for your timezone (cron is always in UTC).
-    - cron: "0 2 * * *"
+    # Runs at 02:07 UTC ≈ 07:37 AM IST every day.
+    # Deliberately off the top of the hour (avoid :00) - GitHub's own docs
+    # warn that on-the-hour schedules are most likely to be delayed, since
+    # that's when shared runner load peaks across all of GitHub Actions.
+    - cron: "7 2 * * *"
   workflow_dispatch: {}   # lets you trigger it manually from the Actions tab
 
 jobs:
   send-news:
     runs-on: ubuntu-latest
     timeout-minutes: 5   # hard cap - kills the job instead of hanging forever
+    permissions:
+      contents: write   # needed so the workflow can commit the audio file back
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
@@ -31,3 +35,24 @@ jobs:
           GNEWS_API_KEY: ${{ secrets.GNEWS_API_KEY }}
           NEWSDATA_API_KEY: ${{ secrets.NEWSDATA_API_KEY }}
         run: python news_bot.py
+
+      - name: Save today's audio into the repo
+        run: |
+          mkdir -p audio
+          rm -f audio/*.mp3
+          if [ -f /tmp/daily_briefing.mp3 ]; then
+            cp /tmp/daily_briefing.mp3 audio/latest_briefing.mp3
+          else
+            echo "No audio file found at /tmp/daily_briefing.mp3 - skipping save (text digest still went out)."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add audio/latest_briefing.mp3
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update daily audio briefing $(date -u +%Y-%m-%d)"
+            git push
+          fi
